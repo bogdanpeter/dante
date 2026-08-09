@@ -1,1698 +1,1364 @@
 ---
-title: "Mi a Dante?"
-chapter: 1
 author: Peter Bogdan
-version: 1.0.0
-status: draft
-last_updated: 2026-08-05
+chapter: 1
+chapter_title: Mi a Dante?
+status: complete
+title: DANTE -- A professzionális Audio over IP rendszerek kézikönyve
+version: 1.0
 ---
 
 # 1. Mi a Dante?
 
-## A fejezet célja
+> **A fejezet célja:** megérteni, milyen problémára született a Dante,
+> hogyan illeszkedik az Audio over IP világába, és milyen mérnöki
+> alapfogalmakra épül a későbbi működésének megértése.
 
-A Dante-ról sok helyen úgy beszélnek, mint egy professzionális audióhálózati
-technológiáról. Ez a meghatározás helyes, de önmagában nagyon keveset mond.
+## Mit fogsz megtanulni?
 
-Ahhoz, hogy valóban megértsük a Dante működését, először azt kell
-megértenünk, milyen problémák vezettek a megszületéséhez.
+A fejezet végére képes leszel:
 
-Ez a fejezet ezért nem egy termékbemutató.
+-   elmagyarázni, miért vált nehezen kezelhetővé a nagy analóg
+    audiórendszerek fizikai routingja;
+-   megkülönböztetni az analóg audiót, a digitális audiót és az Audio
+    over IP-t;
+-   megérteni, miért más probléma az audió hálózati továbbítása, mint
+    egy fájl elküldése;
+-   értelmezni a latency, jitter, packet loss és clock synchronization
+    fogalmát;
+-   elmagyarázni, milyen szerepet játszik az Ethernet és az IP egy
+    Dante-rendszerben;
+-   magas szinten megérteni a Dante discovery, clocking és routing
+    működését;
+-   megérteni, miért fontos a hálózati tervezés;
+-   felkészülni az Ethernetről, IP-ről, PTP-ről, QoS-ról és multicast
+    forgalomról szóló következő fejezetekre.
 
-Sokkal inkább egy mérnöki gondolatmenet.
+------------------------------------------------------------------------
 
-A fejezet végére meg fogod érteni:
+# 1.1 Kezdjük a problémával, ne a technológiával
 
-- milyen korlátai voltak az analóg rendszereknek;
-- miért nem oldotta meg önmagában a digitális audió ezeket a problémákat;
-- miért nem elegendő egyszerűen "hangot küldeni Etherneten";
-- hogyan született meg az Audio over IP;
-- miért vált a Dante az iparág egyik meghatározó technológiájává.
+Amikor valaki először találkozik a Dante névvel, könnyű beleesni abba a
+hibába, hogy a technológiát egy újabb audióinterfészként próbálja
+megérteni.
 
----
+Ez félrevezető.
 
-# 1.1 Egy koncert, amelyet senki sem szeretne bekábelezni
+A Dante megértéséhez jobb kérdéssel kezdeni:
 
-Képzeljünk el egy nagyszabású szabadtéri koncertet.
+> **Miért volt egyáltalán szükség hálózati audióra?**
 
-A színpadon dolgozik egy teljes zenekar:
+A válaszhoz képzeljünk el egy nagyobb élő produkciót.
 
-- dobfelszerelés több mikrofonnal;
-- basszusgitár;
-- két elektromos gitár;
-- billentyűs hangszerek;
-- fúvósszekció;
-- vokalisták;
-- főénekes.
+Legyen benne:
 
-Ehhez kapcsolódnak még:
+-   32 mikrofon;
+-   16 vezeték nélküli mikrofon;
+-   két keverőpult;
+-   külön monitorrendszer;
+-   több DSP;
+-   felvevő számítógép;
+-   broadcast feed;
+-   több színpadi egység;
+-   erősítők;
+-   vezérlőrendszer.
 
-- vezeték nélküli mikrofonok;
-- in-ear monitor rendszerek;
-- színpadi monitorok;
-- felvevő rendszer;
-- televíziós közvetítés;
-- streaming rendszer.
+A rendszernek nem egyszerűen hangot kell továbbítania.
 
-A hangmérnök azonban nem a színpad mellett dolgozik.
+Ugyanazt a hangforrást több különböző rendszernek kell eljuttatni.
 
-A keverőállás – az úgynevezett **Front of House (FOH)** – gyakran
-50–100 méterre található a színpadtól.
+Egy mikrofon jele például egyszerre lehet:
 
-A kérdés egyszerűnek tűnik.
-
-**Hogyan jut el minden mikrofon jele a keverőig?**
-
-## A klasszikus megoldás
-
-Évtizedeken keresztül a válasz ugyanaz volt.
-
-Kábelekkel.
-
-Minden egyes mikrofon külön analóg vezetéken kapcsolódott a keverőhöz.
-
-```mermaid
-flowchart LR
-
-subgraph Stage["Színpad"]
-
-Kick["Kick"]
-Snare["Snare"]
-OH["Overhead"]
-Bass["Bass"]
-Guitar["Gitár"]
-Vocal["Ének"]
-
-end
-
-MC["Analóg multicore"]
-
-FOH["FOH keverő"]
-
-Stage --> MC --> FOH
+``` text
+mikrofon
+   │
+   ├──► FOH
+   ├──► Monitor
+   ├──► Recorder
+   └──► Broadcast
 ```
 
-Nagy rendszereknél a különálló kábeleket egyetlen vastag
-**multicore kábelkötegbe** fogták össze.
+Az analóg világban ezek a kapcsolatok alapvetően fizikai kapcsolatok.
 
-Egy 48 vagy 64 csatornás multicore nem csupán hosszú.
+A hálózati audió egyik legfontosabb újítása éppen az, hogy a **fizikai
+infrastruktúrát és a logikai routingot szétválasztja**.
 
-Nehéz is.
+------------------------------------------------------------------------
 
-Telepítése több ember munkáját igényli, javítása időigényes,
-szállítása költséges.
+# 1.2 Az analóg gondolkodás
 
-Mindezek ellenére hosszú időn keresztül ez jelentette az iparági szabványt.
+Az analóg audiórendszer alapmodellje egyszerű:
 
----
-
-## Az analóg rendszer előnye
-
-Érdemes megjegyezni, hogy az analóg kábelezés nem "rossz" technológia.
-
-Éppen ellenkezőleg.
-
-Rendkívül egyszerű.
-
-Ha egy mikrofon jele nem érkezik meg a keverőbe, a hibakeresés sokszor
-egy multiméterrel és némi rutinnal percek alatt elvégezhető.
-
-Kevés a rejtett összetevő.
-
-Kevés a szoftver.
-
-Kevés a konfiguráció.
-
-A rendszer működése szinte teljes egészében látható.
-
-Ez az egyszerűség az analóg rendszerek egyik legnagyobb erőssége.
-
----
-
-## A méretnövekedés problémája
-
-A problémák akkor jelentkeztek, amikor a rendszerek mérete növekedni kezdett.
-
-Vegyünk példának egy közepes méretű színházat.
-
-| Jel típusa | Darabszám |
-|------------|----------:|
-| Mikrofon | 48 |
-| Hangszerek | 24 |
-| Monitor visszatérők | 16 |
-| Effektek | 8 |
-| Tartalék csatornák | 16 |
-
-Összesen:
-
-**112 különálló analóg jelút.**
-
-Minden jelhez:
-
-- kábel;
-- csatlakozó;
-- forrasztás;
-- patch pont;
-- hibalehetőség.
-
-A rendszer komplexitása közel lineárisan nő a csatornák számával.
-
----
-
-> ### Mérnöki megjegyzés
->
-> Az analóg korszakban a kábelezés gyakran nem pusztán költségtényező volt,
-> hanem maga jelentette a rendszer fizikai korlátját.
-> Egy új mikrofon hozzáadása sokszor nem technikai, hanem logisztikai feladat
-> volt: új kábelre, új patchpontra és gyakran új multicore kapacitásra volt
-> szükség.
-
----
-
-## Egy gondolatkísérlet
-
-Képzeljük el, hogy ugyanazt az énekmikrofont egyszerre szeretnénk eljuttatni
-
-- a FOH keverőhöz;
-- a monitor keverőhöz;
-- a felvevő rendszerhez;
-- a televíziós közvetítéshez;
-- egy streaming számítógéphez.
-
-Analóg rendszerben ez nem egyetlen kapcsolat.
-
-Hanem több.
-
-```mermaid
-flowchart LR
-
-Mic["🎤 Mikrofon"]
-
-Splitter["Analóg splitter"]
-
-FOH["FOH"]
-
-MON["Monitor"]
-
-REC["Felvevő"]
-
-TV["Broadcast"]
-
-STR["Streaming"]
-
-Mic --> Splitter
-
-Splitter --> FOH
-Splitter --> MON
-Splitter --> REC
-Splitter --> TV
-Splitter --> STR
+``` text
+FORRÁS ───────────────► CÉL
 ```
 
-A splitterek kiváló eszközök.
+A mikrofonból kijövő jelnek fizikailag el kell jutnia a keverőig.
 
-De minden újabb ág:
+Ha ugyanazt a jelet több helyre kell eljuttatni, a jelút fizikai
+elágaztatására van szükség.
 
-- növeli a költséget;
-- növeli a kábelek számát;
-- növeli a hibalehetőségeket.
+## Splitter
 
----
+A legegyszerűbb megoldás egy splitter:
 
-## A valódi kérdés
+``` mermaid
+flowchart LR
+    MIC["Mikrofon"] --> SPLIT["Splitter"]
+    SPLIT --> FOH["FOH"]
+    SPLIT --> MON["Monitor"]
+    SPLIT --> REC["Recorder"]
+```
 
-Ezen a ponton egy mérnök óhatatlanul felteszi a következő kérdést:
+Ez teljesen működőképes megoldás.
 
-> Ha a számítógépes hálózatok képesek másodpercenként gigabájtnyi adatot
-> továbbítani, miért ne lehetne ugyanezen a hálózaton professzionális
-> hangot is továbbítani?
+Egy nagy produkcióban azonban sok ilyen kapcsolat lehet.
 
-Ez a kérdés első látásra egyszerűnek tűnik.
+A rendszerhez hozzáadódik:
 
-A válasz azonban sokkal összetettebb.
+-   kábelezés;
+-   patch panel;
+-   multicore;
+-   stage box;
+-   splitter;
+-   csatlakozók;
+-   tartalék kábelek;
+-   dokumentáció.
 
-A hang ugyanis **nem akármilyen adat**.
+A probléma tehát nem az, hogy az analóg technológia nem tudja
+továbbítani a hangot.
 
-És éppen ez az a felismerés, amely végül elvezetett a Dante megszületéséhez
-## 1.2 Miért nem működik jól az analóg világ?
+A probléma a **méretezés**.
 
-Az analóg hangtechnika több mint fél évszázadon keresztül szolgálta ki a professzionális audióipart. Koncertek, színházak, televíziós stúdiók és rádiók ezrei működtek analóg kábelezéssel, és a mai napig számos rendszerben találkozhatunk vele.
+------------------------------------------------------------------------
 
-Éppen ezért fontos leszögezni, hogy az analóg technológia nem vált használhatatlanná. Számos alkalmazásban ma is kiváló választás.
+# 1.3 Mi történik, amikor a rendszer nagyobb lesz?
 
-A kérdés nem az, hogy az analóg rendszerek működnek-e.
+Képzeljünk el egy 8 csatornás rendszert.
 
-A kérdés az, hogy **hogyan viselkednek, amikor a rendszer mérete többszörösére nő.**
+``` text
+8 bemenet
+   │
+   ▼
+keverő
+```
 
----
+Ez könnyen kezelhető.
 
-### A skálázhatóság problémája
+Most legyen 64 bemenet, két keverő, monitorrendszer és felvétel.
+
+``` text
+             ┌──► FOH
+             │
+Bemenetek ───┼──► Monitor
+             │
+             ├──► Recorder
+             │
+             └──► Broadcast
+```
+
+A fizikai kapcsolatok száma növekedni kezd.
+
+A rendszer üzemeltetője egy idő után már nemcsak azt tartja fejben,
+hogy:
+
+> „A 17-es csatorna a lábdob."
+
+Hanem azt is, hogy:
+
+> „A 17-es jel melyik splitből jön, melyik patchen megy át, melyik
+> multicore melyik végén van, melyik keverő melyik bemenetére érkezik,
+> és melyik másik rendszer kap még belőle."
+
+Ez már routingprobléma.
+
+------------------------------------------------------------------------
+
+# 1.4 A digitális átmenet
+
+A következő nagy lépés a digitális audió volt.
+
+A hang analóg jelként érkezik:
+
+``` text
+Mikrofon
+   │
+   ▼
+Analóg elektromos jel
+```
+
+Az ADC ezt mintákká alakítja:
+
+``` text
+Analóg jel
+   │
+   ▼
+ADC
+   │
+   ▼
+Digitális minták
+```
+
+A digitális jel feldolgozható, tárolható és továbbítható.
+
+Ez óriási előrelépés volt.
+
+De itt fontos egy különbséget megérteni:
+
+> **A digitális audió nem feltétlenül hálózati audió.**
+
+Egy digitális interfész továbbra is lehet pont--pont kapcsolat.
+
+------------------------------------------------------------------------
+
+# 1.5 Digitális interfész ≠ Audio over IP
+
+A professzionális audió történetében több digitális interfész jelent
+meg.
+
+Például:
+
+-   AES3;
+-   ADAT;
+-   MADI;
+-   S/PDIF.
+
+Ezeket nem kell „elavult" technológiáknak tekinteni.
+
+Mindegyiknek megvan a saját alkalmazási területe.
+
+A lényeg inkább az architektúra.
+
+## Pont--pont digitális kapcsolat
+
+``` text
+Eszköz A ═════════════ Eszköz B
+```
+
+## Hálózati audió
+
+``` mermaid
+flowchart LR
+    A["Eszköz A"] --> SW["Ethernet hálózat"]
+    B["Eszköz B"] --> SW
+    C["Eszköz C"] --> SW
+    D["Eszköz D"] --> SW
+```
+
+A második modellben több végpont ugyanazt a hálózati infrastruktúrát
+használhatja.
+
+Ez a Dante egyik alapvető gondolata.
+
+------------------------------------------------------------------------
+
+# 1.6 Miért pont Ethernet?
+
+Itt jutunk el a Dante egyik legfontosabb alapjához.
+
+Az Ethernet eredetileg nem audiótechnológia.
+
+Számítógépes hálózatokhoz készült.
+
+A professzionális Audio over IP egyik nagy felismerése az volt, hogy a
+már létező hálózati technológiákat audiótovábbításra is lehet használni.
+
+Ez azért erős koncepció, mert az Ethernet ökoszisztémája már
+rendelkezik:
+
+-   szabványos fizikai rétegekkel;
+-   switchekkel;
+-   optikai kapcsolatokkal;
+-   réz Ethernet-kábelekkel;
+-   VLAN-okkal;
+-   QoS-mechanizmusokkal;
+-   multicast-kezeléssel;
+-   redundanciával;
+-   hálózatfelügyeleti eszközökkel.
+
+A Dante ezekre a hálózati alapokra épít.
+
+Ez azonban rögtön felvet egy problémát:
+
+> Egy irodai hálózat és egy professzionális élő audióhálózat ugyanazokat
+> a technológiákat használhatja, de **nem feltétlenül ugyanúgy kell
+> megtervezni őket**.
+
+------------------------------------------------------------------------
+
+# 1.7 Miért nem elég az, hogy „van elég sávszélesség"?
+
+Ez az egyik leggyakoribb kezdő félreértés.
+
+Tegyük fel, hogy egy switch gigabites portokkal rendelkezik.
+
+Első gondolat:
+
+> „A gigabit bőven elég, tehát a Dante működni fog."
+
+A sávszélesség valóban fontos.
+
+De nem az egyetlen tényező.
+
+Egy valós idejű audiórendszerben számít:
+
+-   a késleltetés;
+-   a jitter;
+-   a packet loss;
+-   a csomagok sorrendje;
+-   a pufferelés;
+-   az időszinkronizáció;
+-   a multicast kezelés;
+-   a QoS;
+-   a hálózati torlódás;
+-   a redundancia.
+
+Ezért a Dante-hálózat tervezésekor nem azt kérdezzük:
+
+> „Elég gyors a switch?"
+
+hanem:
+
+> **„Megfelelően viselkedik-e a teljes hálózat az időkritikus
+> audióforgalom alatt?"**
+
+------------------------------------------------------------------------
+
+# 1.8 Az élő hang és az adatfájl közötti különbség
 
 Vegyünk két példát.
 
-Az első egy kisebb rendezvény.
+## 1. példa -- PDF
 
-| Eszköz | Darabszám |
-|--------|----------:|
-| Mikrofon | 8 |
-| DI Box | 2 |
-| Monitor | 2 |
+Egy PDF letöltése közben egy adatcsomag elveszik.
 
-Ebben a rendszerben az analóg kábelezés egyszerű, áttekinthető és költséghatékony.
+A TCP újraküldheti.
 
-Most nézzünk meg egy nagyobb koncertet.
+A felhasználó ebből valószínűleg semmit sem vesz észre.
 
-| Eszköz | Darabszám |
-|--------|----------:|
-| Mikrofon | 64 |
-| Hangszer | 24 |
-| Vezeték nélküli vevő | 16 |
-| Monitor út | 24 |
-| In-ear rendszer | 24 |
-| Broadcast feed | 32 |
-| Felvételi csatorna | 64 |
+## 2. példa -- koncert
 
-Ebben a rendszerben már több száz analóg jel mozog egyszerre.
+Egy énekes hangjának egy részlete ugyanabban a pillanatban kell eljutnia
+a feldolgozási lánc következő eleméhez.
 
-Minden egyes új csatorna:
+Ha az adat túl későn érkezik, már nem ugyanazt a problémát oldja meg.
 
-- új csatlakozót jelent;
-- új kábelt jelent;
-- új hibalehetőséget jelent;
-- nagyobb telepítési időt jelent.
+A hangnak nemcsak **meg kell érkeznie**.
 
-A rendszer méretének növekedésével nemcsak a kábelek száma nő, hanem a hibák valószínűsége is.
+Megfelelő időben kell megérkeznie.
 
----
+Ez az időkritikus működés az Audio over IP egyik központi problémája.
 
-### A fizikai korlát
+------------------------------------------------------------------------
 
-Az analóg jel egyik sajátossága, hogy **minden kapcsolatnak saját fizikai vezeték szükséges**.
+# 1.9 Latency
 
-Ha ugyanazt a mikrofonjelet három különböző eszköz szeretné használni, akkor három fizikai kapcsolatot kell kialakítani.
+A latency késleltetést jelent.
 
-```mermaid
-flowchart LR
+Egy audiórendszerben a teljes késleltetés több részből állhat:
 
-Mic["🎤 Mikrofon"]
-
-Splitter["Analóg splitter"]
-
-FOH["FOH"]
-
-MON["Monitor"]
-
-REC["Recorder"]
-
-Mic --> Splitter
-
-Splitter --> FOH
-Splitter --> MON
-Splitter --> REC
-```
-
-A kapcsolatokat nem lehet "megosztani" úgy, mint egy számítógépes hálózatban.
-
-Minden új útvonal további hardvert igényel.
-
----
-
-### Tömeg és logisztika
-
-Egy professzionális multicore kábel nem csupán hosszú.
-
-Nehéz is.
-
-Egy 64 csatornás, 75 méteres analóg multicore tömege könnyen meghaladhatja az 50 kilogrammot.
-
-Ennek következményei:
-
-- szállítási költség;
-- telepítési idő;
-- nagyobb fizikai terhelés;
-- több munkaerő.
-
-A kábelek sérülése sem ritka.
-
-Egy megtört vagy megszakadt érpár sokszor csak a helyszínen derül ki.
-
----
-
-> ### Mérnöki megjegyzés
->
-> Nagy rendezvényeken a kábelmenedzsment önálló feladatkör. Egy rosszul megtervezett kábelnyomvonal nemcsak a telepítési időt növeli, hanem balesetveszélyt is jelenthet.
-
----
-
-### A földhurkok problémája
-
-Az analóg rendszerek egyik legismertebb hibaforrása a földhurok.
-
-Egyszerűsítve akkor alakul ki, amikor két vagy több eszköz földpotenciálja között kis feszültségkülönbség jön létre, és a kiegyenlítő áram a jelkábeleken keresztül folyik.
-
-Ennek tipikus következménye:
-
-- 50 Hz-es brumm;
-- 100 Hz-es felharmonikusok;
-- zavaró zaj.
-
-A jelenség különösen gyakori:
-
-- nagy épületekben;
-- fesztiválokon;
-- külön tápköröket használó rendszerekben.
-
-Ezért találkozhatunk olyan eszközökkel, mint:
-
-- DI Box;
-- Ground Lift kapcsoló;
-- leválasztó transzformátor.
-
-Ezek nem a rendszer kényelmét szolgálják.
-
-Hanem egy meglévő fizikai probléma kezelésére szolgálnak.
-
----
-
-### Elektromágneses zavarok
-
-Minden analóg vezeték antennaként viselkedik.
-
-Minél hosszabb a kábel,
-
-annál nagyobb az esély arra, hogy külső elektromágneses zavarokat vesz fel.
-
-Lehetséges zavarforrások:
-
-- dimmerek;
-- villanymotorok;
-- LED tápegységek;
-- rádióadók;
-- nagy teljesítményű tápkábelek.
-
-Ezért olyan fontos:
-
-- a szimmetrikus jelátvitel;
-- a megfelelő árnyékolás;
-- a helyes kábelvezetés.
-
----
-
-### Patch panelek
-
-Nagy rendszerekben az analóg jelek ritkán jutnak közvetlenül A pontból B pontba.
-
-Gyakori, hogy több patch panelen is keresztülhaladnak.
-
-```text
+``` text
 Mikrofon
-      │
-      ▼
-Stage Box
-      │
-      ▼
-Patch Panel
-      │
-      ▼
-Multicore
-      │
-      ▼
-FOH Patch
-      │
-      ▼
-Keverő
+   │
+   ▼
+ADC
+   │
+   ▼
+DSP
+   │
+   ▼
+Network
+   │
+   ▼
+Receive Buffer
+   │
+   ▼
+DSP
+   │
+   ▼
+DAC
+   │
+   ▼
+Hangszóró
 ```
 
-Minden további csatlakozás:
+A hálózati latency tehát csak egy része az end-to-end latencynek.
 
-- növeli az átmeneti ellenállást;
-- növeli a meghibásodás lehetőségét;
-- növeli a hibakeresés idejét.
+Ezért nagyon fontos elkerülni az olyan leegyszerűsítést, hogy:
 
----
+> „A Dante késleltetése X ms."
 
-### A rugalmasság hiánya
+A valós érték függhet:
 
-Tegyük fel, hogy a koncert kezdete előtt tíz perccel a rendező azt kéri:
+-   az eszköztől;
+-   a hálózattól;
+-   a konfigurációtól;
+-   a receiver latency-beállításától;
+-   a használt flow típusától;
+-   a hálózati kapcsolatok sebességétől.
 
-> „A 12-es mikrofont küldjük át a broadcast keverőbe is.”
+Az Audinate dokumentációja szerint például a multicast flow-k minimális
+latency-beállítása 1 ms, miközben egyes eszközök ennél magasabb
+minimumot igényelhetnek. Ezért konkrét számot mindig az adott eszköz és
+konfiguráció dokumentációjával együtt kell értelmezni.
 
-Analóg rendszerben ez gyakran azt jelenti, hogy:
+------------------------------------------------------------------------
 
-- új patch kábelre van szükség;
-- új splitterre van szükség;
-- fizikailag át kell kábelezni a rendszert.
+# 1.10 Jitter
 
-Ez időigényes.
+A jitter az időzítés változása.
 
-És minden fizikai beavatkozás növeli a hibázás lehetőségét.
+Ha az adatcsomagok ideálisan érkeznek:
 
----
-
-### Összefoglalás
-
-Az analóg technológia hosszú időn keresztül kiválóan szolgálta a professzionális audiót.
-
-A problémák nem az analóg jelátvitelből fakadtak, hanem abból, hogy a modern rendszerek mérete és összetettsége olyan szintre nőtt, ahol a kizárólag fizikai kábelezésre épülő architektúra egyre nehezebben volt kezelhető.
-
-Ez a felismerés vezetett el a digitális audió következő fejlődési lépcsőjéhez.
-
-A következő fejezetben azt vizsgáljuk meg, hogy a digitális keverőpultok és a digitális jelátvitel miért jelentettek előrelépést, és miért nem oldották meg önmagukban a hálózati audió problémáját.
-
-## 1.3 A digitális audió önmagában nem oldotta meg a problémát
-
-Az 1980-as évektől kezdve a professzionális hangtechnika fokozatosan áttért a digitális jelfeldolgozásra.
-
-Megjelentek a digitális keverőpultok, a digitális effektprocesszorok, a digitális hangrögzítők és később a teljesen digitális jelfeldolgozó rendszerek.
-
-Sokan úgy gondolták, hogy ezzel az analóg korszak problémái megszűnnek.
-
-A valóság azonban ennél jóval összetettebb volt.
-
----
-
-### Mit jelentett a digitalizáció?
-
-A digitalizáció elsődleges célja nem a hálózati kommunikáció volt.
-
-A cél a jel minőségének megőrzése volt.
-
-Egy analóg hangjel a mikrofon után egy analóg-digitális átalakítóba (ADC) kerül, ahol meghatározott időközönként mintát vesznek belőle.
-
-Az így keletkező számsor már digitális adatként dolgozható fel.
-
-```mermaid
-flowchart LR
-
-A["Analóg hang"] --> B["ADC"]
-B --> C["PCM minták"]
-C --> D["Digitális jelfeldolgozás"]
-D --> E["DAC"]
-E --> F["Analóg kimenet"]
+``` text
+|----|----|----|----|----|
 ```
 
-A digitális feldolgozás számos előnyt hozott:
+akkor egy ingadozó érkezési idő így nézhet ki:
 
-- kisebb torzítás;
-- nagyobb dinamikatartomány;
-- ismételhető jelfeldolgozás;
-- pontos paraméterezhetőség;
-- presetek használata;
-- automatizálás.
+``` text
+|------|-|-------|---|---|
+```
 
-A kábelezés problémája azonban továbbra is megmaradt.
+A vevőoldali rendszer pufferrel képes bizonyos eltéréseket kezelni.
 
----
+De itt kompromisszum jelenik meg:
 
-### A digitális keverő nem jelent digitális hálózatot
-
-Ez az egyik legfontosabb félreértés.
-
-Egy digitális keverőpult belső működése lehet teljesen digitális, attól még a mikrofonok ugyanúgy analóg kábeleken csatlakoznak hozzá.
-
-A jel útja gyakran így nézett ki:
-
-```text
-Mikrofon
+``` text
+Nagyobb buffer
      │
-Analóg XLR
+     ├──► nagyobb tolerancia
      │
-Stage Box
-     │
-Multicore
-     │
-Digitális keverő
+     └──► nagyobb késleltetés
 ```
 
-Látható, hogy a digitalizáció csak a keverőnél kezdődik.
+Ezért a valós idejű audióban a stabil hálózat és a kiszámítható működés
+fontosabb, mint az, hogy egyetlen pillanatnyi mérésben mekkora maximális
+throughputot látunk.
 
-A hosszú kábel továbbra is analóg.
+------------------------------------------------------------------------
 
----
+# 1.11 Packet loss
 
-### Új problémák jelentek meg
+A hálózat csomagokkal továbbítja az adatot.
 
-A digitális technológia új lehetőségeket adott, de új kihívásokat is hozott.
+Ha egy audióhoz tartozó csomag elveszik, a vevőnek nem áll
+rendelkezésére az adott adat.
 
-Megjelentek különböző digitális interfészek:
+Ez hallható hibát okozhat.
 
-- AES3 (AES/EBU)
-- S/PDIF
-- ADAT
-- MADI
+A packet loss lehetséges okai között lehet:
 
-Mindegyik kiváló technológia volt a maga területén.
+-   fizikai hibás kapcsolat;
+-   túlterhelés;
+-   hibás konfiguráció;
+-   elégtelen hálózati erőforrás;
+-   hibás multicast-kezelés;
+-   problémás uplink;
+-   hálózati hurok;
+-   eszközhiba.
 
-Viszont egyik sem oldotta meg teljes egészében a nagy rendszerek összekapcsolását.
+A hibakeresésnél ezért nem elég azt látni, hogy:
 
----
+> „A Dante Controllerben nincs zöld pipa."
 
-### A MADI példája
+Meg kell határozni, hogy **hol keletkezik a probléma**.
 
-A MADI (Multichannel Audio Digital Interface) sokáig a professzionális digitális audió egyik meghatározó szabványa volt.
+------------------------------------------------------------------------
 
-Legnagyobb előnye, hogy egyetlen kábelen több tucat audiócsatorna továbbítására képes.
+# 1.12 Clock: miért kell egyáltalán közös idő?
 
-Ez óriási előrelépést jelentett az analóg multicore kábelekhez képest.
+Ez az egyik legfontosabb Dante-fogalom.
 
-```mermaid
-flowchart LR
+A digitális audió minták időben egymáshoz kötöttek.
 
-Stage["Stage Box"]
+Ha egy rendszerben több különálló digitális eszköz dolgozik, nem elég,
+hogy mindegyik „nagyjából ugyanakkor" dolgozik.
 
-MADI["MADI kapcsolat"]
+Hosszú távon az órák eltérnének egymástól.
 
-Console["Digitális keverő"]
+Ezért közös időalapra van szükség.
 
-Stage --> MADI --> Console
+A standard Dante-hálózatokban az eszközök IEEE 1588 Precision Time
+Protocolt (PTP) használnak a helyi órák szinkronizálására.
+
+Az Audinate dokumentációja szerint a Dante-hálózatban egy eszköz kerül
+kiválasztásra PTP Leader Clockként, a többi pedig ehhez igazítja a helyi
+óráját.
+
+``` mermaid
+flowchart TB
+    L["PTP Leader Clock"]
+    A["Dante eszköz A"]
+    B["Dante eszköz B"]
+    C["Dante eszköz C"]
+    D["Dante eszköz D"]
+
+    L --> A
+    L --> B
+    L --> C
+    L --> D
 ```
 
-Ez azonban továbbra is pont-pont kapcsolat.
+A későbbi PTP-fejezetben ezt a mechanizmust nagyon részletesen fogjuk
+tárgyalni.
 
-A MADI nem hálózat.
+------------------------------------------------------------------------
 
-Ha egy harmadik eszközt is szeretnénk bekötni, új kapcsolatot kell kialakítani.
+# 1.13 A Dante története
 
----
+A Dante történetét érdemes pontosan megismerni, mert sok rövid
+összefoglaló pontatlanul kezeli az éveket.
 
-### A pont–pont kapcsolatok korlátai
+Az Audinate hivatalos története szerint a történet 2003-ban indult,
+amikor egy Sydneyben dolgozó mérnöki csapat egy hálózati problémaként
+kezdett gondolkodni az audiókapcsolatokról.
 
-Tegyük fel, hogy három digitális keverő dolgozik ugyanabban a rendszerben.
+A gondolat lényegében ez volt:
 
-- FOH
-- Monitor
-- Broadcast
+> Ha a hangtechnikai eszközök között rengeteg különálló kapcsolatot
+> építünk, miért ne lehetne ezeket egy közös hálózaton kezelni?
 
-Mindháromnak szüksége van ugyanazokra a mikrofonokra.
+2006-ban a NICTA úgy döntött, hogy a technológia kereskedelmi
+hasznosítására kiválik a projektből az Audinate.
 
-Pont–pont kapcsolatok esetén az összeköttetések száma gyorsan növekedni kezd.
+2008-ban a Dolby Lake Processor lett az első Dante-kompatibilis
+professzionális audióeszköz. Az Audinate történeti leírása szerint a
+technológia egy Barbra Streisand-koncerten debütált Washingtonban.
 
-```text
-FOH  ───────── Monitor
+Ezért három évszámot érdemes megjegyezni:
 
-  \             /
-
-   \           /
-
-    \         /
-
-     Broadcast
+``` text
+2003 ──► fejlesztési irány
+2006 ──► Audinate spin-out
+2008 ──► első Dante-kompatibilis professzionális eszköz
 ```
 
-Minél több eszköz kerül a rendszerbe, annál bonyolultabb lesz a topológia.
+A „Dante 2006-ban jelent meg" állítás tehát leegyszerűsítő.
 
-A probléma hasonló ahhoz, mint amit az analóg kábelezésnél láttunk.
+------------------------------------------------------------------------
 
-Csak most már digitális formában.
+# 1.14 Mit próbált megoldani a Dante?
 
----
+A Dante mögötti probléma több részből áll.
 
-### A rugalmasság továbbra sem volt megfelelő
+## 1. Routing
 
-A digitális interfészek jelentős része fix kapcsolatokat használ.
+Hogyan kapcsoljuk össze rugalmasan az audióforrásokat és a vevőket?
 
-Ha egy új eszközt szeretnénk csatlakoztatni,
+## 2. Synchronization
 
-gyakran:
+Hogyan biztosítjuk, hogy az eszközök közös időalapon működjenek?
 
-- új kábel szükséges;
-- új interfész szükséges;
-- új konfiguráció szükséges.
+## 3. Transport
 
-A rendszer továbbra sem viselkedik úgy, mint egy valódi számítógépes hálózat.
+Hogyan juttatjuk el az audiót a hálózaton?
 
----
+## 4. Discovery
 
-> ### Mérnöki megjegyzés
->
-> A digitális jelátvitel és a hálózati jelátvitel nem ugyanaz.
->
-> Egy digitális összeköttetés attól még lehet teljesen statikus.
->
-> A valódi áttörést nem a digitális audió jelentette, hanem az, amikor a digitális audió hálózati adattá vált.
+Hogyan találják meg egymást az eszközök?
 
----
+## 5. Configuration
 
-### Mi hiányzott?
+Hogyan konfiguráljuk a rendszert anélkül, hogy minden kapcsolatot
+fizikailag újra kellene kábelezni?
 
-Ha egy informatikust megkérdezünk, hogyan kötne össze tíz számítógépet, valószínűleg nem tíz külön kábelt húzna minden gép között.
+Ezért a Dante-t nem érdemes egyszerűen „hang Etherneten" technológiaként
+kezelni.
 
-Switch-et használna.
+Inkább egy olyan platformként érdemes gondolni rá, amely az
+audióroutinghoz, az időszinkronizációhoz és a hálózati működéshez
+szükséges mechanizmusokat egy egységes rendszerben kezeli.
 
-A professzionális audió azonban sokáig nem így működött.
+------------------------------------------------------------------------
 
-Hiányzott egy olyan technológia,
+# 1.15 Mi történik, amikor csatlakoztatunk egy Dante-eszközt?
 
-amely:
+Ez az első olyan pont, ahol érdemes bepillantani a háttérfolyamatokba.
 
-- szabványos hálózatot használ;
-- egyszerűen bővíthető;
-- képes valós időben működni;
-- garantálja a pontos időzítést;
-- egyszerre sok eszközt képes kiszolgálni.
+Tegyük fel, hogy egy Dante stage boxot csatlakoztatunk a switchhez.
 
-Ez volt az a pont, ahol az Audio over IP megjelent.
+A folyamat leegyszerűsítve:
 
----
-
-### Összefoglalás
-
-A digitális audió forradalmasította a hangfeldolgozást.
-
-A jel minősége jelentősen javult, új lehetőségek nyíltak meg, és megjelentek a nagy csatornaszámú digitális interfészek.
-
-A hálózati gondolkodás azonban még hiányzott.
-
-A következő fejezetben azt vizsgáljuk meg, hogy miért nem elegendő egyszerűen Ethernet-csomagokba tenni a hangot, és milyen műszaki problémákat kellett megoldani ahhoz, hogy megszülethessen az Audio over IP.
-
-## 1.4 Miért nem lehet egyszerűen elküldeni a hangot egy Ethernet hálózaton?
-
-Az előző fejezet végén felmerült egy látszólag egyszerű kérdés.
-
-> Ha egy számítógépes hálózat képes másodpercenként több gigabit adat továbbítására, miért ne küldhetnénk rajta hangot is?
-
-Első pillantásra a válasz kézenfekvőnek tűnik.
-
-A mikrofonból érkező digitális mintákat csomagokba kell tenni, majd Etherneten elküldeni a célállomásra.
-
-A valóságban azonban ez nem működik ilyen egyszerűen.
-
-A hang nem olyan adat, mint egy dokumentum, egy fénykép vagy egy e-mail.
-
----
-
-### Az informatikai hálózatok célja
-
-A hagyományos adatkommunikáció elsődleges célja az, hogy az adat hibamentesen megérkezzen.
-
-Vegyünk például egy PDF fájlt.
-
-Ha egy csomag elveszik útközben, a hálózati protokollok újraküldik.
-
-A felhasználó ebből semmit sem vesz észre.
-
-Lehet, hogy a fájl letöltése néhány századmásodperccel tovább tart.
-
-Ez általában nem jelent problémát.
-
-A dokumentum végül sértetlenül megérkezik.
-
----
-
-### A hang teljesen más
-
-Most képzeljünk el egy élő koncertet.
-
-Az énekes megszólal.
-
-A mikrofon jele elindul a keverő felé.
-
-Ha a hálózat úgy döntene, hogy egy elveszett csomagot újraküld,
-
-akkor a hang már régen továbbhaladt.
-
-A hiányzó minta néhány ezredmásodperccel később érkezne meg.
-
-Ekkor már nincs hová beilleszteni.
-
-Az időablak bezárult.
-
----
-
-> ### Mérnöki megjegyzés
->
-> Élő audió esetén nem az a legfontosabb, hogy minden adat megérkezzen.
->
-> Sokkal fontosabb, hogy **időben** érkezzen meg.
-
----
-
-### Egy egyszerű hasonlat
-
-Képzeljünk el egy szimfonikus zenekart.
-
-Ha az ütősök három másodperccel később kezdenek játszani,
-
-nem az a probléma, hogy végül megszólalnak.
-
-Hanem az, hogy rossz időben.
-
-A hálózati audió pontosan ugyanilyen.
-
-Egy későn érkező csomag gyakran értéktelenebb, mint egy elveszett.
-
----
-
-### Az idő a legfontosabb erőforrás
-
-A professzionális audióban a késleltetés (latency) szigorúan korlátozott.
-
-Egy modern Dante rendszerben a tipikus késleltetés:
-
-| Alkalmazás | Jellemző késleltetés |
-|------------|---------------------:|
-| Élő hangosítás | 0,25–1 ms |
-| Broadcast | 1–5 ms |
-| Stúdió | 1–2 ms |
-
-Összehasonlításképpen:
-
-Egy weboldal betöltése esetén a 100–200 ms késleltetés teljesen elfogadható.
-
-Élő audióban ugyanez már használhatatlan lenne.
-
----
-
-### Mi történik egy Ethernet switchben?
-
-Egy hagyományos switch nem tudja, hogy a rajta áthaladó csomag:
-
-- videó,
-- e-mail,
-- biztonsági kamera,
-- nyomtatási feladat,
-- vagy élő audió.
-
-Számára minden Ethernet keret.
-
-```mermaid
-flowchart LR
-
-A["PC"]
-
-B["IP kamera"]
-
-C["Dante eszköz"]
-
-SW["Ethernet Switch"]
-
-D["Szerver"]
-
-A --> SW
-B --> SW
-C --> SW
-SW --> D
+``` text
+1. Fizikai kapcsolat létrejön
+             │
+             ▼
+2. Hálózati konfiguráció
+             │
+             ▼
+3. Eszközfelderítés
+             │
+             ▼
+4. Dante Controller megjeleníti
+             │
+             ▼
+5. Routing konfigurálható
+             │
+             ▼
+6. Clock szinkronizáció
+             │
+             ▼
+7. Audióforgalom
 ```
 
-A switch alapértelmezés szerint nem tesz különbséget a forgalom között.
+Az Audinate dokumentációja szerint egy Dante-eszköz hálózatra
+csatlakoztatáskor automatikusan konfigurálja IP-címét és hirdeti magát a
+hálózaton.
 
-Ha torlódás alakul ki,
+Ha van DHCP-szerver, az eszköz DHCP-n keresztül kaphat IP-konfigurációt.
 
-a csomagok várakozni kezdenek.
+Ha nincs DHCP, link-local címzést használhat.
 
-Az élő hang számára ez komoly problémát jelent.
+A Dante Controller ezután automatikusan felderítheti és megjelenítheti
+az eszközt.
 
----
+Ez nagyon kényelmes.
 
-### A késleltetés még nem minden
+De fontos:
 
-Képzeljük el, hogy tíz egymást követő audiócsomag indul el.
+> **Az automatikus discovery nem jelenti azt, hogy a hálózat
+> automatikusan jól van megtervezve.**
 
-Ideális esetben egyenletes időközönként érkeznek meg.
+------------------------------------------------------------------------
 
-```text
-|----|----|----|----|----|----|
+# 1.16 IP-címzés a Dante világában
+
+Kezdőként könnyű azt gondolni, hogy a Dante „nem is igazi hálózat", mert
+az eszközök sokszor szinte azonnal megjelennek.
+
+Valójában éppen ellenkezőleg.
+
+A Dante IP-alapú hálózati technológiát használ.
+
+Egy tipikus egyszerű rendszerben:
+
+``` text
+Dante eszköz ──┐
+Dante eszköz ──┼──► Switch
+Dante eszköz ──┤
+PC / Dante Controller ──┘
 ```
 
-Valós hálózatban azonban ez inkább így nézhet ki.
+Minden résztvevőnek működő hálózati kapcsolat és megfelelő
+IP-konfiguráció szükséges.
 
-```text
-|------|-|---------|---|------|
+Az Audinate dokumentációja külön is felhívja a figyelmet arra, hogy a
+Dante-eszközöknek megfelelő IP-címzési környezetben kell működniük, és a
+hibás IP-konfigurációk a Dante Controllerben is megjelenhetnek.
+
+Ez később az IP-fejezetben lesz igazán fontos.
+
+------------------------------------------------------------------------
+
+# 1.17 Discovery
+
+A discovery azt jelenti, hogy a rendszer képes megtalálni és azonosítani
+az eszközöket.
+
+A Dante Controllerben például megjelenhet:
+
+``` text
+Stagebox-01
+Monitor-Console
+FOH-Console
+Dante Virtual Soundcard
+DSP-01
 ```
 
-Az átlagos késleltetés lehet ugyanaz,
+Az Audinate dokumentációja szerint az eszközök olyan információkat is
+hirdethetnek, mint:
 
-de az egyes csomagok eltérő időben érkeznek.
+-   eszköznév;
+-   csatornanevek;
+-   csatornaszám;
+-   sample rate;
+-   bit depth.
 
-Ezt nevezzük **jitternek**.
+Ez azért fontos, mert a routingnál nemcsak azt kell tudni, hogy „van egy
+eszköz".
 
----
+Azt is tudni kell, hogy:
 
-### Miért veszélyes a jitter?
+> Milyen csatornái vannak, milyen formátumban működik, és kompatibilis-e
+> a másik végponttal?
 
-A digitális audió folyamatos mintasor.
+------------------------------------------------------------------------
 
-Ha a minták egyenetlenül érkeznek,
+# 1.18 Routing és subscription
 
-a lejátszó nem tudja pontosan, mikor melyiket kell megszólaltatni.
-
-Ezért minden Audio over IP rendszer puffereket használ.
-
-```mermaid
-flowchart LR
-
-Packets["Érkező csomagok"]
-
-Buffer["Jitter Buffer"]
-
-DAC["DAC"]
-
-Packets --> Buffer --> DAC
-```
-
-A puffer kisimítja az érkezési különbségeket.
-
-Ennek azonban ára van.
-
-Növekszik a késleltetés.
-
-A rendszertervezés egyik legfontosabb feladata a megfelelő kompromisszum megtalálása.
-
----
-
-### Csomagvesztés
-
-A hagyományos adatátvitel során az elveszett csomag újraküldhető.
-
-Élő audióban erre általában nincs idő.
-
-Ezért a rendszernek úgy kell működnie,
-
-hogy a csomagvesztés gyakorlatilag nulla legyen.
-
-Egyetlen elveszett csomag nem feltétlenül hallható.
-
-Több egymást követő elveszett csomag azonban már:
-
-- kattogást;
-- recsegést;
-- kimaradást;
-- torzulást
-
-okozhat.
-
----
-
-### És még mindig van egy megoldatlan probléma
-
-Tegyük fel,
-
-hogy két különböző Dante eszköz ugyanazt a hangot szeretné egyszerre rögzíteni.
-
-Honnan tudják,
-
-hogy ugyanaz a "pillanat"
-
-mindkettő számára ugyanazt jelenti?
-
-Ehhez már nem elegendő a gyors hálózat.
-
-A rendszer minden résztvevőjének ugyanazt az időt kell ismernie.
-
-Ez vezet el a könyv egyik legfontosabb témájához:
-
-a pontos időszinkronizációhoz.
-
-Erről azonban később, a PTP-ről szóló fejezetben részletesen is szó lesz.
-
----
-
-### Összefoglalás
-
-Első pillantásra úgy tűnhet, hogy az Audio over IP nem más, mint digitális hang Ethernet-csomagokba csomagolva.
-
-Valójában ennél jóval többről van szó.
-
-Egy professzionális audióhálózatnak egyszerre kell biztosítania:
-
-- rendkívül alacsony késleltetést;
-- minimális jittert;
-- gyakorlatilag nulla csomagvesztést;
-- pontos időszinkronizációt;
-- nagy megbízhatóságot.
-
-Ezek azok a követelmények, amelyek miatt a professzionális Audio over IP rendszerek működése jelentősen eltér egy hagyományos számítógépes hálózatétól.
-
-A következő fejezetben megismerjük, hogyan született meg az Audio over IP koncepciója, és milyen különböző megközelítések alakultak ki, mielőtt a Dante iparági szabvánnyá vált.
-
-## 1.5 Az Audio over IP megszületése
-
-Az előző fejezetekben három fontos felismeréshez jutottunk.
-
-Az analóg rendszerek megbízhatóak voltak, de nagy rendszerekben egyre nehezebben voltak bővíthetők és üzemeltethetők.
-
-A digitális audió jelentősen javította a hangminőséget és a jelfeldolgozás lehetőségeit, de a pont–pont kapcsolatok továbbra is megmaradtak.
-
-A szabványos számítógépes hálózatok rendkívül rugalmasak voltak, ugyanakkor önmagukban nem voltak alkalmasak valós idejű professzionális audió továbbítására.
-
-Felmerült tehát egy új kérdés.
-
-> Lehetséges-e a professzionális hangot ugyanazon az Ethernet hálózaton továbbítani, amelyet egyébként számítógépek, szerverek és egyéb informatikai eszközök is használnak?
-
-Erre a kérdésre adott válasz vezetett az Audio over IP technológiák megszületéséhez.
-
----
-
-### Mit jelent az Audio over IP?
-
-Az Audio over IP (röviden AoIP) olyan technológiák összefoglaló neve, amelyek digitális hangot továbbítanak IP-alapú számítógépes hálózatokon.
-
-Fontos hangsúlyozni, hogy az Audio over IP nem egyetlen szabvány vagy egyetlen gyártó terméke.
-
-Inkább egy gyűjtőfogalom.
-
-Ahogyan az "autó" sem jelent egyetlen márkát, úgy az Audio over IP sem jelent egyetlen technológiát.
-
-Számos különböző rendszer tartozik ide.
-
----
-
-### Az alapötlet
-
-Az Audio over IP egyik legfontosabb felismerése a következő volt.
-
-Nem külön audiókábeleket kell építeni.
-
-Nem speciális infrastruktúrát kell telepíteni.
-
-Hanem ugyanazt az Ethernet hálózatot kell használni, amely már egyébként is rendelkezésre áll.
-
-```mermaid
-flowchart LR
-
-Mic["🎤 Mikrofon"]
-
-Stage["Stage Box"]
-
-SW["Ethernet Switch"]
-
-FOH["FOH"]
-
-MON["Monitor"]
-
-REC["Recorder"]
-
-Stage --> SW
-
-SW --> FOH
-
-SW --> MON
-
-SW --> REC
-
-Mic --> Stage
-```
-
-Ebben a rendszerben a mikrofon jele egyszer kerül be a hálózatba.
-
-Ezután tetszőleges számú jogosult eszköz felhasználhatja ugyanazt az adatfolyamot.
-
-Ez alapvetően új gondolkodásmódot jelentett.
-
----
-
-### Mi változott?
-
-Analóg rendszerben a kapcsolat jelentette az infrastruktúrát.
-
-Audio over IP rendszerben a hálózat jelenti az infrastruktúrát.
-
-Ez apró különbségnek tűnhet.
-
-Valójában ez az egész technológia alapja.
-
-A rendszer középpontjában már nem a kábel áll.
-
-Hanem a hálózat.
-
----
-
-### Új lehetőségek
-
-Az Audio over IP megjelenésével számos korábban elképzelhetetlen lehetőség vált mindennapossá.
+A Dante Controller egyik legfontosabb funkciója az audiórouting
+konfigurálása.
 
 Például:
 
-- ugyanaz a mikrofon egyszerre több keverőbe küldhető;
-- egy új felvevő számítógép csatlakoztatása nem igényel új kábelezést;
-- egyszerűvé válik a távoli vezérlés;
-- könnyebbé válik a redundancia kialakítása;
-- a rendszer rugalmasan bővíthető.
-
-A hangsúly egyre inkább a konfiguráción, és egyre kevésbé a fizikai kábelezésen van.
-
----
-
-### Nem minden AoIP rendszer egyforma
-
-Az Audio over IP gyors fejlődésével több, egymástól jelentősen eltérő megközelítés is megjelent.
-
-A legismertebbek közé tartoznak:
-
-| Technológia | Elsődleges felhasználás |
-|-------------|------------------------|
-| Dante | Általános professzionális audió |
-| Ravenna | Broadcast és stúdió |
-| AES67 | Interoperabilitási szabvány |
-| AVB / TSN | Determinisztikus Ethernet |
-| Q-LAN | QSC rendszerek |
-
-Mindegyik ugyanarra a problémára keres megoldást.
-
-A megvalósítás azonban eltérő.
-
----
-
-> ### Mérnöki megjegyzés
->
-> Az Audio over IP nem egyetlen technológia.
->
-> Sokkal inkább egy mérnöki szemlélet.
->
-> A közös cél minden rendszerben ugyanaz:
->
-> **megbízható, alacsony késleltetésű audió továbbítása szabványos hálózaton.**
-
----
-
-### Miért nem lett egyetlen szabvány?
-
-Ez gyakran felmerülő kérdés.
-
-Miért nem alakult ki rögtön egyetlen univerzális megoldás?
-
-A válasz részben történelmi.
-
-Az egyes gyártók eltérő igényekre fejlesztettek rendszereket.
-
-A broadcast világ más követelményeket támasztott, mint az élő hangosítás.
-
-A stúdiók más kompromisszumokat fogadtak el, mint egy stadion vagy egy konferenciaközpont.
-
-Ezért több, egymással párhuzamos technológia fejlődött ki.
-
----
-
-### Mi tette sikeressé a Dante-t?
-
-A Dante nem azért vált sikeressé, mert elsőként jelent meg.
-
-És nem is azért, mert minden műszaki paraméterében felülmúlta a konkurenseit.
-
-Sikerének egyik legfontosabb oka az volt, hogy a felhasználó számára rendkívül egyszerűvé tette egy összetett technológia használatát.
-
-Automatikus eszközfelismerés.
-
-Automatikus órajel-kezelés.
-
-Egyszerű routing.
-
-Szabványos Ethernet infrastruktúra.
-
-A felhasználó gyakran úgy tudott professzionális Audio over IP rendszert építeni, hogy közben nem kellett mély hálózati ismeretekkel rendelkeznie.
-
-Természetesen a háttérben továbbra is ugyanazok a hálózati alapelvek működtek.
-
-Ez a könyv éppen ezek megértésében kíván segítséget nyújtani.
-
----
-
-### Összefoglalás
-
-Az Audio over IP megjelenése alapvetően megváltoztatta a professzionális audió rendszerek tervezését.
-
-A hangsúly a fizikai kábelezésről fokozatosan áthelyeződött a hálózati architektúrára.
-
-Ebben a fejlődési folyamatban a Dante vált az egyik legjelentősebb és legszélesebb körben alkalmazott technológiává.
-
-A következő fejezetben részletesebben megvizsgáljuk magát a Dante rendszert, annak alapelveit és legfontosabb építőköveit.
-
-## 1.6 A Dante megszületése
-
-2006-ban az ausztrál Audinate bemutatta azt a technológiát, amelyet ma Dante néven ismerünk.
-
-A Dante célja nem egy újabb digitális audió interfész létrehozása volt.
-
-A cél egy olyan rendszer megalkotása volt, amely lehetővé teszi professzionális audió továbbítását szabványos Ethernet hálózatokon úgy, hogy közben megfelel az élő hangosítás, a broadcast és a stúdiók rendkívül szigorú követelményeinek.
-
-A Dante megjelenésével először vált lehetővé, hogy egyetlen Ethernet infrastruktúrán:
-
-- több száz audiócsatorna működjön párhuzamosan;
-- az eszközök automatikusan felismerjék egymást;
-- a routing szoftveresen történjen;
-- a rendszer alacsony késleltetéssel működjön;
-- mindez a felhasználó számára egyszerű maradjon.
-
----
-
-### Mi volt az alapötlet?
-
-A Dante legfontosabb felismerése egyszerű.
-
-Ne a hangrendszer legyen külön infrastruktúra.
-
-Használjuk ugyanazt a hálózatot, amelyet az informatikai világ már évtizedek óta fejleszt.
-
-Ez azt jelenti, hogy egy professzionális hangrendszer alapját ugyanazok a szabványos komponensek képezhetik, mint egy vállalati hálózatét.
-
-- Ethernet kábelek;
-- szabványos switch-ek;
-- IP protokoll;
-- redundáns hálózatok;
-- optikai gerinchálózat.
-
-A különbséget már nem a kábelek jelentik.
-
-Hanem az a szoftveres réteg, amely képes a hangot valós időben kezelni.
-
----
-
-### A Dante működése magas szinten
-
-Nagyon leegyszerűsítve egy Dante rendszer működése a következő.
-
-```mermaid
-flowchart LR
-
-Mic["🎤 Mikrofon"]
-
-ADC["ADC"]
-
-TX["Dante Transmitter"]
-
-SW["Ethernet Switch"]
-
-RX["Dante Receiver"]
-
-DAC["DAC"]
-
-SPK["🔊 Hangszóró"]
-
-Mic --> ADC
-ADC --> TX
-TX --> SW
-SW --> RX
-RX --> DAC
-DAC --> SPK
+``` text
+Stagebox-01
+    TX 01
+      │
+      ▼
+FOH-Console
+    RX 01
 ```
 
-Első pillantásra ez nem tűnik különösebben bonyolultnak.
+Ezt a Dante terminológiában subscriptionként kezeljük.
 
-A háttérben azonban számos összetett folyamat zajlik egyszerre.
+A felhasználói felületen ez egyszerűnek tűnik.
 
-A rendszernek például:
-
-- fel kell ismernie az összes Dante eszközt;
-- ki kell választania a közös órajelet;
-- szinkronban kell tartania a mintavételezést;
-- biztosítania kell a megfelelő késleltetést;
-- kezelnie kell a hálózati forgalmat;
-- szükség esetén redundáns útvonalakat kell használnia.
-
-A felhasználó ebből gyakran csak annyit érzékel, hogy egy új eszköz néhány másodperc múlva megjelenik a Dante Controllerben.
-
----
-
-### A Dante nem csak audiót továbbít
-
-Sokan úgy gondolnak a Dante-ra, mint "hang Etherneten".
-
-Valójában ennél többről van szó.
-
-A hálózaton egyszerre többféle információ áramlik.
+A háttérben azonban a rendszernek több dolgot kell összehangolnia.
 
 Például:
 
-- audió minták;
-- órajel-információk;
-- eszközfelderítés;
-- konfigurációs adatok;
-- állapotinformációk.
+-   az adócsatornát;
+-   a vevőcsatornát;
+-   a kompatibilis formátumot;
+-   a clock domaint;
+-   a flow-t;
+-   az adott eszköz kapacitását.
 
-Ezért egy Dante hálózatban egyszerre több különböző hálózati protokoll működik együtt.
+Az Audinate dokumentációja szerint a subscription hibák között például
+előfordulhat eltérő sample rate, eltérő clock domain vagy flow-kapacitás
+elérése.
 
-Ezeket a könyv későbbi fejezeteiben részletesen megvizsgáljuk.
+Ez nagyon fontos tanulság:
 
----
+> **Ha egy subscription nem működik, nem biztos, hogy a hálózati kábel a
+> hibás.**
 
-### A Dante egyik legnagyobb előnye
+------------------------------------------------------------------------
 
-Vegyük ugyanazt a példát, mint korábban.
+# 1.19 Unicast és multicast
 
-Egy mikrofont egyszerre szeretnénk használni:
+Két alapvető hálózati továbbítási modell:
 
-- a FOH keverőben;
-- a monitor keverőben;
-- egy felvevő számítógépen;
-- a broadcast rendszerben.
+## Unicast
 
-Analóg rendszerben ehhez splitterre volt szükség.
+Egy adó → egy konkrét vevő.
 
-Dante esetén elegendő egyszer létrehozni a kapcsolatot a hálózaton.
+``` text
+TX ─────────► RX
+```
 
-```mermaid
+## Multicast
+
+Egy adó → egy multicast csoport → több vevő.
+
+``` text
+              ┌──► RX1
+TX ──► Group ─┼──► RX2
+              └──► RX3
+```
+
+A multicast különösen akkor érdekes, amikor ugyanazt az audióforrást sok
+vevőnek kell eljuttatni.
+
+Ez viszont már közvetlenül összekapcsolja a Dante-t a hálózati
+multicast-mechanizmusokkal.
+
+Később ezért részletesen foglalkozunk majd:
+
+-   multicasttal;
+-   IGMP-vel;
+-   IGMP Snoopinggal;
+-   Querierrel;
+-   switch multicast táblákkal.
+
+------------------------------------------------------------------------
+
+# 1.20 Miért fontos a QoS?
+
+A hálózatban többféle forgalom jelenhet meg.
+
+Például:
+
+``` text
+Audió
+PTP
+Vezérlés
+Egyéb IP-forgalom
+```
+
+Nem minden csomag azonos jelentőségű.
+
+Egy időkritikus audió- vagy clocking-forgalmat nem feltétlenül ugyanúgy
+kell kezelni, mint egy nagy fájl másolását.
+
+Ezért fontos a Quality of Service.
+
+A QoS segítségével a hálózati eszközök különböző prioritásokat
+alkalmazhatnak.
+
+A későbbi QoS-fejezetben megvizsgáljuk:
+
+-   DSCP;
+-   802.1p;
+-   queue;
+-   priority;
+-   congestion;
+-   buffer.
+
+------------------------------------------------------------------------
+
+# 1.21 A Dante és az „irodai hálózat" problémája
+
+Egy Dante-rendszer lehet fizikailag nagyon hasonló egy irodai
+Ethernet-hálózathoz.
+
+Mindkettőben lehet:
+
+-   Cat kábel;
+-   optika;
+-   Ethernet switch;
+-   IP-cím;
+-   VLAN;
+-   router.
+
+A különbség az alkalmazás követelményeiben van.
+
+Egy irodai hálózatban egy rövid megszakadás gyakran csak annyit jelent,
+hogy egy weboldal egy pillanattal később töltődik be.
+
+Egy élő audiórendszerben ugyanez hallható hibát okozhat.
+
+Ezért a hálózati mérnök és az audiómérnök szemléletét össze kell
+kapcsolni.
+
+------------------------------------------------------------------------
+
+# 1.22 A hibakeresési szemlélet
+
+Képzeld el, hogy a Dante Controllerben egy vevő nem kap jelet.
+
+A kezdő reakció:
+
+> „Valami baj van a Dante-tal."
+
+A mérnöki reakció:
+
+> „Melyik rétegben van a hiba?"
+
+Egy lehetséges hibakeresési fa:
+
+``` text
+Nincs hang
+   │
+   ├── Fizikai kapcsolat?
+   │       └── nincs → kábel / port / eszköz
+   │
+   ├── IP-kapcsolat?
+   │       └── nincs → címzés / interfész / VLAN
+   │
+   ├── Dante discovery?
+   │       └── nincs → discovery / hálózat
+   │
+   ├── Clock rendben?
+   │       └── nincs → PTP / clock domain
+   │
+   ├── Subscription rendben?
+   │       └── nincs → routing / kompatibilitás
+   │
+   ├── Flow rendben?
+   │       └── nincs → kapacitás / multicast / hálózat
+   │
+   └── Audió rendben?
+           └── nincs → eszköz / DSP / gain / routing
+```
+
+Ez a gondolkodásmód később sokkal fontosabb lesz, mint bármelyik konkrét
+Dante Controller menüpont.
+
+------------------------------------------------------------------------
+
+# 1.23 Dante mint rendszer, nem mint „doboz"
+
+Eddig három különálló dolgot láttunk:
+
+### Audió
+
+``` text
+ADC → DSP → DAC
+```
+
+### Hálózat
+
+``` text
+Ethernet → Switch → IP
+```
+
+### Idő
+
+``` text
+PTP → közös időalap
+```
+
+A Dante ezeket egy működő rendszerben kapcsolja össze.
+
+``` mermaid
+flowchart TB
+    AUDIO["Digitális audió"]
+    NETWORK["Ethernet / IP hálózat"]
+    CLOCK["PTP időszinkronizáció"]
+    ROUTING["Dante routing"]
+
+    AUDIO --> ROUTING
+    NETWORK --> ROUTING
+    CLOCK --> ROUTING
+```
+
+Ezért a könyv további részeiben sem egyetlen technológiaként fogjuk
+vizsgálni.
+
+------------------------------------------------------------------------
+
+# 1.24 Mi nem Dante?
+
+Fontos néhány dolgot elkülöníteni.
+
+## Dante ≠ Ethernet
+
+Az Ethernet a hálózati infrastruktúra egyik alapja.
+
+A Dante az audió- és AV-rendszer működéséhez használja a hálózatot.
+
+## Dante ≠ IP
+
+Az IP a hálózati kommunikáció egyik rétege.
+
+A Dante erre épít, de nem azonos vele.
+
+## Dante ≠ PTP
+
+A PTP időszinkronizációs protokoll.
+
+A Dante használja, de a Dante ennél sokkal több.
+
+## Dante ≠ Dante Controller
+
+A Dante Controller egy konfigurációs és menedzsmenteszköz.
+
+A Dante-rendszer működése nem azonos a Controller felületével.
+
+Ez a megkülönböztetés később nagyon hasznos lesz.
+
+------------------------------------------------------------------------
+
+# 1.25 Egy teljes példa: kis színház
+
+Tegyük fel, hogy egy 400 férőhelyes színház hangrendszerét tervezzük.
+
+## Követelmények
+
+-   24 színpadi analóg bemenet;
+-   8 vezeték nélküli mikrofon;
+-   FOH konzol;
+-   monitorrendszer;
+-   2 DSP;
+-   felvétel;
+-   stream;
+-   erősítők.
+
+### Hagyományos felépítés
+
+``` mermaid
 flowchart LR
-
-Mic["🎤 Mikrofon"]
-
-Stage["Stage Box"]
-
-Switch["Switch"]
-
-FOH["FOH"]
-
-MON["Monitor"]
-
-REC["Recorder"]
-
-TV["Broadcast"]
-
-Mic --> Stage
-Stage --> Switch
-
-Switch --> FOH
-Switch --> MON
-Switch --> REC
-Switch --> TV
+    STAGE["Színpad"] --> SPLIT["Splitter / Patch"]
+    SPLIT --> FOH["FOH"]
+    SPLIT --> MON["Monitor"]
+    FOH --> DSP["DSP"]
+    DSP --> AMP["Erősítők"]
 ```
 
-A fizikai kábelezés változatlan marad.
+### Dante-alapú felépítés
 
-Csupán a hálózati kapcsolatok változnak.
-
----
-
-### Mitől lett ennyire sikeres?
-
-A Dante sikerének egyik kulcsa az volt, hogy a rendkívül összetett hálózati működést nagyrészt elrejtette a felhasználó elől.
-
-Egy kezdő felhasználó gyakran úgy tud működő rendszert létrehozni, hogy közben nem ismeri:
-
-- az ARP működését;
-- a multicast kezelését;
-- a Precision Time Protocol részleteit;
-- a QoS működését.
-
-Ez óriási előny volt.
-
-Ugyanakkor nagy rendszereknél ezeknek az ismereteknek a hiánya könnyen hibákhoz vezethet.
-
-Ezért épül fel ez a könyv fordított logikával.
-
-Először megértjük a működést.
-
-Csak ezután tanuljuk meg a Dante Controller használatát.
-
----
-
-### Mi történik valójában?
-
-A legtöbb felhasználó úgy látja a Dante rendszert, mint egy virtuális patch panelt.
-
-Valójában azonban ennél jóval több történik.
-
-Egyetlen másodperc alatt:
-
-- több tízezer Ethernet keret halad át a hálózaton;
-- folyamatos időszinkronizáció zajlik;
-- minden eszköz saját pufferét kezeli;
-- a switch-ek prioritások alapján továbbítják a csomagokat;
-- a vevőeszközök folyamatosan korrigálják saját órájukat.
-
-Mindez úgy történik, hogy a felhasználó ebből semmit sem vesz észre.
-
-És pontosan ez egy jól működő Dante rendszer egyik legnagyobb erőssége.
-
----
-
-### Összefoglalás
-
-A Dante nem egyszerűen egy digitális audió interfész.
-
-Nem csupán egy hálózati protokoll.
-
-Hanem egy olyan teljes rendszer, amely képes professzionális audiót továbbítani szabványos IP hálózatokon, miközben biztosítja a valós idejű működéshez szükséges időzítést, megbízhatóságot és rugalmasságot.
-
-A következő fejezetben megvizsgáljuk, hogyan épül fel egy tipikus Dante rendszer, milyen eszközök alkotják, és milyen szerepet töltenek be az egyes komponensek.
-
-## 1.7 Hogyan gondolkodik egy Dante rendszer?
-
-Az előző fejezetekben megismertük azokat a problémákat, amelyek az analóg és a korai digitális audiórendszereket jellemezték.
-
-Láttuk, hogy a professzionális Audio over IP nem egyszerűen egy újabb kábelezési megoldás, hanem egy teljesen új szemlélet.
-
-Most érdemes egy pillanatra megállni.
-
-Nem azért, hogy újabb technológiát tanuljunk.
-
-Hanem azért, hogy megértsük, **hogyan "gondolkodik" egy Dante rendszer.**
-
----
-
-### Az analóg gondolkodás
-
-Analóg rendszerben a kapcsolat maga a kábel.
-
-Ha egy mikrofont össze szeretnénk kötni egy keverővel, akkor közöttük fizikai vezeték jön létre.
-
-```
-Mikrofon
-     │
-     │
-     ▼
-Keverő
+``` mermaid
+flowchart LR
+    STAGE["Dante Stage Box"] --> SW1["Switch"]
+    SW1 --> FOH["FOH"]
+    SW1 --> MON["Monitor"]
+    SW1 --> DSP["DSP"]
+    SW1 --> REC["Recorder"]
+    SW1 --> STREAM["Stream"]
+    SW1 --> AMP["Dante erősítők"]
 ```
 
-Ha ugyanazt a mikrofont egy másik keverőnek is használni kell, akkor újabb fizikai kapcsolat szükséges.
+A második rendszerben a fizikai hálózat közös infrastruktúra.
 
-Ebben a világban a kábel jelenti a kapcsolatot.
+De itt jelenik meg a könyv egyik legfontosabb mérnöki tanulsága:
 
----
+> **A Dante nem szünteti meg a rendszertervezést. Áthelyezi a
+> rendszertervezés egy részét a hálózatba.**
 
-### A hálózati gondolkodás
+Korábban patch panelt és multicore-t terveztünk.
 
-Egy Dante rendszer teljesen másként működik.
+Most:
 
-A kábel már nem két eszközt köt össze.
+-   switcheket;
+-   uplinkeket;
+-   VLAN-okat;
+-   multicast-kezelést;
+-   QoS-t;
+-   redundanciát;
+-   PTP-t
 
-A kábel egy közös hálózat része.
+is terveznünk kell.
 
+------------------------------------------------------------------------
+
+# 1.26 Egy nagyobb példa: sportcsarnok
+
+Egy sportcsarnokban a rendszer még összetettebb lehet.
+
+Lehet:
+
+-   több színpad;
+-   több kommentátori pozíció;
+-   központi vezérlés;
+-   broadcast;
+-   háttérzene;
+-   paging;
+-   vészhangosítás;
+-   több különálló keverőrendszer.
+
+A fizikai kábelezés itt már jelentős infrastruktúra.
+
+A hálózati architektúra lehet például:
+
+``` mermaid
+flowchart TB
+    CORE["Core hálózat"]
+    S1["Stage / Zone 1"]
+    S2["Stage / Zone 2"]
+    FOH["FOH"]
+    BROAD["Broadcast"]
+    DSP["DSP"]
+    AMP["Amplifier"]
+
+    S1 --> CORE
+    S2 --> CORE
+    FOH --> CORE
+    BROAD --> CORE
+    CORE --> DSP
+    CORE --> AMP
 ```
-               Switch
-           ┌────┼────┐
-           │    │    │
-         FOH  Monitor Recorder
-           │
-       Stage Box
-           │
-      Mikrofon
+
+Itt már nem elég azt mondani:
+
+> „Dante van a hálózaton."
+
+Meg kell tudni válaszolni:
+
+-   milyen a topológia?
+-   hol vannak a switch-ek?
+-   hogyan működik a redundancia?
+-   milyen multicast-forgalom van?
+-   milyen a PTP?
+-   milyen QoS van beállítva?
+-   hol vannak a hálózati határok?
+-   mi történik egy switch kiesésekor?
+
+Ezek lesznek a későbbi rendszertervezési fejezetek témái.
+
+------------------------------------------------------------------------
+
+# 1.27 Az első mentális modell
+
+Most alakítsunk ki egy egyszerű mentális modellt.
+
+Ha Dante-rendszerre gondolsz, képzeld el ezt az öt réteget:
+
+``` text
+┌─────────────────────────────┐
+│ 5. Audióalkalmazás          │
+├─────────────────────────────┤
+│ 4. Dante routing / flow     │
+├─────────────────────────────┤
+│ 3. PTP / időszinkronizáció  │
+├─────────────────────────────┤
+│ 2. IP / UDP / multicast     │
+├─────────────────────────────┤
+│ 1. Ethernet / fizikai hálózat│
+└─────────────────────────────┘
 ```
 
-Ebben a rendszerben a mikrofon nem "egy keverőhöz csatlakozik".
+Ha később hibát keresünk, ezt a modellt fogjuk használni.
 
-Hanem **a hálózatra csatlakozik**.
+Nem kell még minden réteget értened.
 
-Ez alapvető szemléletváltás.
+A következő fejezetekben egyenként lebontjuk őket.
 
----
+------------------------------------------------------------------------
 
-### A hálózat mint közös erőforrás
+# 1.28 Ellenőrző kérdések
 
-Egy vállalati számítógépes hálózatban senki sem épít külön Ethernet-kábelt minden egyes számítógép és minden egyes szerver közé.
+## Alap
 
-A hálózat közös infrastruktúra.
+1.  Miért okoz problémát a fizikai routing egy nagy analóg
+    audiórendszerben?
+2.  Mi a különbség egy digitális pont--pont interfész és egy
+    AoIP-rendszer között?
+3.  Miért nem azonos az Ethernet és a Dante?
+4.  Miért nem elegendő a nagy sávszélesség?
+5.  Mit jelent a latency?
+6.  Mit jelent a jitter?
+7.  Mi a packet loss?
+8.  Miért van szükség közös clockra?
+9.  Mi a PTP?
+10. Mi a subscription?
 
-Pontosan ugyanez történik a Dante esetében is.
+## Haladóbb
 
-A mikrofon nem azt kérdezi:
+11. Miért lehet előnyös az audiórouting és a fizikai hálózat
+    szétválasztása?
+12. Milyen előnye és hátránya van annak, ha egy audióhálózat közös
+    infrastruktúrát használ?
+13. Miért lehet problémás egy nem megfelelően kezelt multicast-forgalom?
+14. Miért lehet egy hibás IP-konfiguráció miatt látszólag „Dante-hiba"?
+15. Miért nem jó hibakeresési módszer azonnal a Dante Controllerre
+    koncentrálni?
 
-> Melyik keverőhöz tartozom?
+------------------------------------------------------------------------
 
-Hanem azt:
+# 1.29 Labor 1 -- Analóg vagy hálózati?
 
-> Melyik hálózat része vagyok?
+## Feladat
 
-Ez a különbség első olvasásra apróságnak tűnhet.
+Tervezd meg ugyanazt a rendszert kétféleképpen.
 
-Valójában ez választja el a klasszikus hangtechnikát a modern Audio over IP rendszerektől.
+### Követelmények
 
----
+-   16 analóg bemenet;
+-   8 vezeték nélküli mikrofon;
+-   FOH;
+-   monitor;
+-   recorder;
+-   stream;
+-   két DSP.
 
-### A kapcsolat már nem fizikai
+## A változat
 
-Vegyük a következő példát.
+Tervezd meg hagyományos fizikai routinggal.
 
-Egy új felvevő számítógépet szeretnénk csatlakoztatni a rendszerhez.
+Rajzold fel:
 
-Analóg rendszerben ez gyakran azt jelenti, hogy:
+-   splittereket;
+-   kábeleket;
+-   patch pontokat;
+-   keverőket;
+-   DSP-ket.
 
-- új splitter szükséges;
-- új kábelek szükségesek;
-- új patch-elés szükséges.
+## B változat
 
-Dante esetén elegendő:
+Tervezd meg Audio over IP architektúrával.
 
-1. csatlakoztatni az új eszközt a hálózathoz;
-2. létrehozni a szükséges audiókapcsolatokat.
+Rajzold fel:
 
-A fizikai kábelezés változatlan marad.
+-   stage boxokat;
+-   switcheket;
+-   FOH-ot;
+-   monitort;
+-   DSP-t;
+-   recordert;
+-   stream rendszert.
 
-Csak a konfiguráció változik.
+## Válaszolj
 
----
+1.  Melyik rendszerben több a fizikai audiókapcsolat?
+2.  Melyikben egyszerűbb egy új vevő hozzáadása?
+3.  Melyikben válik fontosabbá a hálózati konfiguráció?
+4.  Melyik rendszerben kell különösen figyelni a hálózati hibákra?
 
-### A rendszer folyamatosan dolgozik
+------------------------------------------------------------------------
 
-Egy Dante hálózat soha nincs "készen".
+# 1.30 Labor 2 -- Hibakeresési gondolkodás
 
-A háttérben folyamatosan történik:
+A FOH konzol nem kapja meg a stage box 1-es csatornáját.
 
-- eszközfelderítés;
-- órajel-szinkronizáció;
-- útvonalválasztás;
-- pufferkezelés;
-- hálózati forgalom figyelése.
+A Dante Controllerben az eszközök láthatók.
 
-A felhasználó ebből általában semmit sem vesz észre.
+A feladatod:
 
-Ez a jól működő rendszer egyik ismérve.
+**Ne próbáld meg azonnal újra létrehozni a subscriptiont.**
 
----
+Először készíts hibakeresési listát.
 
-### A könyv szemlélete
+Vizsgáld meg ebben a sorrendben:
 
-Ez a könyv nem arra tanít meg, hogyan kell egy adott menüpontra kattintani.
+1.  fizikai link;
+2.  IP-cím;
+3.  discovery;
+4.  clock;
+5.  sample rate;
+6.  subscription;
+7.  flow;
+8.  audióút.
 
-Arra tanít meg, hogy mi történik **a kattintás után**.
+A cél annak gyakorlása, hogy a hibát **rétegenként** keresd.
 
-Amikor később egy Dante Controller ablakban létrehozunk egy kapcsolatot, valójában nem egy "vonalat húzunk két eszköz között".
+------------------------------------------------------------------------
 
-A háttérben:
+# 1.31 Deep Dive -- Miért nem TCP?
 
-- hálózati címek kerülnek feloldásra;
-- vezérlőüzenetek cserélnek gazdát;
-- audiófolyamok jönnek létre;
-- időszinkronizáció történik;
-- a switch-ek új forgalmi mintázatot kezelnek.
+A TCP megbízható és sorrendtartó adatátvitelt biztosít. Ha egy csomag
+hiányzik, a protokoll képes annak újraküldésére.
 
-A könyv célja ennek a láthatatlan folyamatnak a megértése.
+Egy fájl letöltésénél ez előny.
 
----
+Élő audiónál viszont a későn érkező adat problémát jelenthet.
 
-> ### Mérnöki gondolkodás
->
-> Egy jó Dante mérnök nem azt kérdezi:
->
-> *"Melyik kábel rossz?"*
->
-> Hanem azt:
->
-> *"A rendszer melyik rétegében jelentkezik a probléma?"*
->
-> Ez a két kérdés ugyan hasonlónak tűnik, mégis teljesen eltérő hibakeresési szemléletet tükröz.
+Egyszerűsített példa:
 
----
+``` text
+T = 100 ms
+A csomagnak ekkor kellene rendelkezésre állnia.
 
-### Mit viszünk tovább?
+Csomag elveszik
+      ↓
+TCP újraküldi
+      ↓
+csomag megérkezik 140 ms-nál
+```
 
-A következő fejezetekben fokozatosan lebontjuk a Dante működését.
+A csomag ugyan megérkezett.
+
+De az eredeti 100 ms-os időablak már elmúlt.
+
+Ezért a valós idejű audió más optimalizálási problémát jelent.
+
+A Dante audiótovábbítása UDP-alapú. Ez nem azt jelenti, hogy a rendszer
+„nem megbízható".
+
+A megbízhatóságot nem az újraküldésre épített fájlátviteli modell adja,
+hanem a megfelelő:
+
+-   hálózattervezés;
+-   pufferelés;
+-   időszinkronizáció;
+-   prioritás;
+-   forgalomkezelés;
+-   hibakezelés.
+
+A későbbi fejezetekben pontosan megvizsgáljuk, hogyan működnek ezek.
+
+------------------------------------------------------------------------
+
+# 1.32 Deep Dive -- Mi történik a háttérben egy subscription után?
+
+A felhasználói nézet:
+
+``` text
+TX 01 ─────► RX 01
+```
+
+A mérnöki nézet ennél sokkal összetettebb.
+
+A rendszernek például ellenőriznie kell:
+
+-   van-e megfelelő adó;
+-   van-e megfelelő vevő;
+-   kompatibilis-e a formátum;
+-   megfelelő-e a sample rate;
+-   azonos clock domainben vannak-e;
+-   van-e még flow-kapacitás;
+-   unicast vagy multicast kapcsolat jön-e létre;
+-   megfelelő-e a hálózati út.
+
+Ezért egy egyszerű kattintás mögött több hálózati és audiómechanizmus
+dolgozik.
+
+A könyv célja, hogy ezeket a későbbi fejezetekben láthatóvá tegye.
+
+------------------------------------------------------------------------
+
+# 1.33 Mit kell most megjegyezned?
+
+Ha ebből a fejezetből csak tíz dolgot jegyzel meg, ezek legyenek:
+
+1.  **A Dante nem egyszerűen egy kábel.**
+2.  **A Dante nem azonos az Ethernettel.**
+3.  **A Dante nem azonos az IP-vel.**
+4.  **A digitális audió nem automatikusan hálózati audió.**
+5.  **Az élő audió időkritikus.**
+6.  **A latency és jitter fontos.**
+7.  **A packet loss hallható problémát okozhat.**
+8.  **A Dante-hálózatnak közös időalapra van szüksége.**
+9.  **A routing és a fizikai hálózat szétválasztható.**
+10. **A Dante megértéséhez hálózati mérnöki gondolkodás kell.**
+
+------------------------------------------------------------------------
+
+# 1.34 A következő fejezet
+
+Most már tudjuk, miért jelent meg az Audio over IP, és miért lett a
+Dante egyik meghatározó platformja.
+
+De még nem tudjuk pontosan, **mit küldünk át a hálózaton**.
+
+A következő fejezet ezért visszalép a hálózat elé.
 
 Megvizsgáljuk:
 
-- hogyan működik a digitális hang;
-- hogyan épül fel egy Ethernet keret;
-- hogyan működik egy switch;
-- hogyan működik az IP;
-- hogyan választódik ki a Master Clock;
-- hogyan épül fel egy audiófolyam;
-- hogyan működik a multicast;
-- hogyan biztosítja a QoS a valós idejű működést.
+``` text
+Hang
+ ↓
+ADC
+ ↓
+Mintavételezés
+ ↓
+PCM
+ ↓
+Bitmélység
+ ↓
+Kvantálás
+ ↓
+Digitális audió
+```
 
-Minden új fejezet ugyanannak a rendszernek egy újabb rétegét tárja fel.
+Ezután már lesz egy pontos képünk arról, hogy milyen adatot kell
+egyáltalán továbbítanunk.
 
-A cél nem csupán a Dante megismerése.
+Innen tudunk majd továbblépni az Ethernetre.
 
-A cél annak megértése, hogy egy modern professzionális audióhálózat hogyan működik a legalsó bitektől egészen a hangszóró membránjáig.
+------------------------------------------------------------------------
 
-## 1.8 A fejezet legfontosabb gondolatai
+# 1.35 Források
 
-Mielőtt továbblépnénk a digitális audió részletes tárgyalására, érdemes néhány percet szánni arra, hogy összefoglaljuk az első fejezet legfontosabb üzeneteit.
+1.  **Audinate -- History**\
+    https://www.audinate.com/company/history/
 
-Ha az alábbi állításokat megérted, akkor az első fejezet elérte a célját.
+2.  **Audinate -- Discovery and auto-configuration**\
+    https://dev.audinate.com/GA/dante-controller/userguide/webhelp/content/discovery_and_auto-configuration.htm
 
-### A professzionális audió fejlődése nem egyetlen technológiai ugrás volt
+3.  **Audinate -- Clock Synchronization**\
+    https://dev.audinate.com/GA/dante-controller/userguide/webhelp/content/clock_synchronization.htm
 
-Az analóg rendszereket nem azért váltották fel új megoldások, mert rosszul működtek.
+4.  **Audinate -- Latency Tab**\
+    https://dev.audinate.com/GA/dante-controller/userguide/webhelp/content/latency_tab.htm
 
-A fejlődést a rendszerek méretének növekedése, a nagyobb rugalmasság iránti igény és az egyre összetettebb produkciók követelményei tették szükségessé.
+5.  **Audinate -- Subscription Tooltips**\
+    https://dev.audinate.com/GA/dante-controller/userguide/webhelp/content/subscription_tooltips.htm
 
----
+6.  **Audinate -- Dante Information for Network Administrators**\
+    https://assets.audinate.com/wp-content/uploads/2022/03/dante-information-for-network-admins.pdf
 
-### A digitális audió nem egyenlő a hálózati audióval
+------------------------------------------------------------------------
 
-Digitális keverő használata önmagában még nem jelent Audio over IP rendszert.
+# 1.36 Fejezeti állapot
 
-A digitális jelfeldolgozás és a hálózati adatátvitel két különböző problémát old meg.
+**Állapot:** `COMPLETE`
 
----
+A fejezet tartalmazza:
 
-### A hang nem közönséges adat
+-   elméleti bevezetést;
+-   történeti hátteret;
+-   rendszerpéldákat;
+-   ábrákat;
+-   Dante működési modellt;
+-   hálózati alapfogalmakat;
+-   hibakeresési gondolkodást;
+-   két laborfeladatot;
+-   két Deep Dive részt;
+-   ellenőrző kérdéseket;
+-   forrásokat.
 
-Egy dokumentum vagy fénykép később is megérkezhet.
+A következő fejezet:
 
-Egy élő koncert hangja nem.
-
-A professzionális audió legfontosabb követelménye az idő.
-
-Nem elegendő, hogy az adat megérkezzen.
-
-Az is szükséges, hogy **pontosan akkor érkezzen meg**, amikor annak meg kell történnie.
-
----
-
-### A hálózat lett az új infrastruktúra
-
-Az Audio over IP legnagyobb újítása nem maga az Ethernet.
-
-Hanem az a szemlélet, hogy a teljes rendszer közös hálózati infrastruktúrára épül.
-
-Ez teszi lehetővé a rugalmas bővíthetőséget és az egyszerű konfigurálhatóságot.
-
----
-
-### A Dante nem varázslat
-
-A Dante mögött ismert hálózati technológiák működnek.
-
-Ethernet.
-
-IP.
-
-UDP.
-
-Precision Time Protocol.
-
-Multicast.
-
-QoS.
-
-A Dante ezeket úgy kombinálja, hogy a felhasználó számára egyszerű, megbízható és gyors rendszert biztosítson.
-
----
-
-### A könyv célja
-
-Ez a könyv nem arra tanít meg, hogyan kell használni egy szoftvert.
-
-Arra tanít meg, hogy **mi történik a háttérben**.
-
-Ha ezt megérted, bármely Dante-kompatibilis eszköz működését könnyebben fogod átlátni.
-
----
-
-## 1.9 Ellenőrző kérdések
-
-Próbálj meg válaszolni a következő kérdésekre anélkül, hogy visszalapoznál.
-
-### Alapfogalmak
-
-1. Miért vált nehezen kezelhetővé az analóg kábelezés nagy rendszerekben?
-
-2. Miért nem oldotta meg önmagában a digitális audió a hálózati problémákat?
-
-3. Mit jelent az Audio over IP?
-
-4. Mi a legfontosabb különbség a digitális audió és a hálózati audió között?
-
-5. Miért fontosabb élő audió esetén az időzítés, mint az újraküldés?
-
----
-
-### Gondolkodtató kérdések
-
-6. Mi történne, ha egy Dante rendszer TCP protokollt használna audió továbbításra?
-
-7. Miért jelent problémát a jitter még akkor is, ha a csomagok nem vesznek el?
-
-8. Miért nem elegendő egy gyors hálózat professzionális audióhoz?
-
-9. Miért tekinthető a Dante inkább rendszernek, mint egyszerű protokollnak?
-
-10. Milyen előnyöket jelent a hálózati gondolkodás a klasszikus patch paneles megoldásokkal szemben?
-
----
-
-## 1.10 Labor
-
-### Labor 1 – Gondolkodjunk rendszerintegrátorként
-
-Egy kulturális központ új hangrendszerének tervezésében veszel részt.
-
-A rendszer elemei:
-
-- 32 mikrofon;
-- 16 vezeték nélküli mikrofon;
-- két digitális keverő;
-- egy felvevő számítógép;
-- egy streaming munkaállomás;
-- két színpadi stage box.
-
-#### Feladat
-
-Papíron vagy rajzolóprogram segítségével készíts két tervet.
-
-Az első legyen hagyományos analóg rendszer.
-
-A második Audio over IP alapú rendszer.
-
-Hasonlítsd össze:
-
-- hány kábelre van szükség;
-- hány különálló kapcsolatra van szükség;
-- mennyire könnyű új eszközt hozzáadni;
-- hogyan történik egy új kapcsolat létrehozása.
-
-A labor célja nem a Dante konfigurálása.
-
-A cél annak felismerése, hogy a két rendszer mögött teljesen eltérő szemlélet áll.
-
----
-
-## 1.11 Deep Dive
-
-### Miért nem TCP?
-
-Valószínűleg már felmerült benned a kérdés.
-
-Ha a TCP garantálja, hogy minden adat megérkezik,
-
-akkor miért nem ezt használja a Dante?
-
-A válasz röviden:
-
-Mert a TCP megbízhatóságot biztosít.
-
-Az élő audió viszont időzítést igényel.
-
-Egy elveszett TCP csomag újraküldése tökéletes egy dokumentum esetén.
-
-Egy élő koncert közben azonban a későn érkező audióminta már használhatatlan.
-
-Ezért a professzionális Audio over IP rendszerek többsége UDP-alapú adatátvitelt alkalmaz.
-
-A UDP önmagában azonban nem oldja meg a problémát.
-
-Szükség van:
-
-- pontos időszinkronizációra;
-- megfelelő pufferkezelésre;
-- prioritáskezelésre;
-- determinisztikus hálózati működésre.
-
-Ezeket a könyv következő fejezeteiben részletesen megvizsgáljuk.
-
----
-
-## A következő fejezet
-
-Az első fejezetben megértettük,
-
-**miért volt szükség a Dante megszületésére.**
-
-Most azonban visszalépünk egy szintet.
-
-Mielőtt tovább vizsgálnánk a hálózati audiót, pontosan meg kell értenünk, mi is történik egy analóg hanggal, amikor digitális adattá alakul.
-
-A következő fejezetben ezért a digitális audió alapjaival foglalkozunk.
-
-A könyv egyik legfontosabb alapköve következik.
+> **2. A digitális audió alapjai**
